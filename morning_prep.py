@@ -371,6 +371,7 @@ def synthesize_brief(
     calls: list,
     coda_content: str = "",
     selected_verticals: list | None = None,
+    slack_context: str = "",
 ) -> dict:
     """
     Ask Claude to synthesize web research + Gong intel + Coda demo guides into a
@@ -403,6 +404,16 @@ to highlight, and discovery questions that fit this company's context.
 {coda_content[:6000]}
 """
 
+    slack_block = ""
+    if slack_context:
+        slack_block = f"""
+=== SLACK INTERNAL DISCUSSIONS (last 90 days) ===
+Internal Slack messages mentioning this company. Use these for context on deal status,
+internal sentiment, blockers, and any commitments made. Flag any deadlines or action items.
+
+{slack_context[:4000]}
+"""
+
     # Trim inputs to keep prompt within a manageable size
     company_research_trimmed  = company_research[:2500]
     attendee_research_trimmed = attendee_research[:1500]
@@ -412,49 +423,57 @@ Company: {company_name} ({domain})
 Attendees: {', '.join(attendees) if attendees else 'Unknown'}
 Meeting date: {datetime.now().strftime('%B %d, %Y')}
 
-Below is research from the web, Gong call history, and Coda demo guides for the relevant Wix verticals.
-Synthesize everything into a structured pre-meeting brief.
+Below is research from multiple sources: web research, Gong call recordings, internal Slack discussions, and Coda demo guides.
+
+IMPORTANT — Synthesize all sources HOLISTICALLY. Do NOT create separate sections per source.
+Instead, blend insights from every source into each field. For each specific insight, append a
+source tag in square brackets: [WEB], [GONG], [SLACK], or [CODA]. A single bullet can cite
+multiple sources if the insight was corroborated across them, e.g. "They need multi-site at scale [WEB][GONG]".
 
 {company_research_trimmed}
 
 {attendee_research_trimmed}
 
 {gong_block}
+{slack_block}
 {coda_block}
 
 Return ONLY a valid JSON object (no markdown, no extra text) with exactly these fields:
 {{
-  "company_summary": "2-3 sentence overview of what the company does, their scale, and why they matter as a prospect",
+  "company_summary": "2-3 sentence overview blending web research, Gong history, and Slack context. Tag key facts with [WEB], [GONG], [SLACK] as appropriate.",
   "industry": "Industry category",
   "company_size": "Estimated headcount or revenue band if found",
-  "tech_stack": ["known or inferred technologies they use"],
-  "why_wix": "1-2 sentences on why they are evaluating Wix / what problem Wix solves for them",
+  "tech_stack": ["known or inferred technologies — tag source, e.g. 'WordPress (current) [WEB]', 'Evaluating headless CMS [GONG]'"],
+  "why_wix": "1-2 sentences on why they are evaluating Wix — synthesize across all sources with tags",
   "attendees": [
     {{
       "name": "Full Name",
       "title": "Inferred or known title",
-      "background": "1-2 sentence background and what to know before meeting them",
-      "talk_to": "One specific thing to say or ask this person"
+      "background": "1-2 sentences blending web + Gong + Slack intel about this person. Tag sources.",
+      "talk_to": "One specific thing to say or ask this person — informed by all available context"
     }}
   ],
-  "pain_points": ["pain point 1", "pain point 2"],
-  "open_questions": ["question 1", "question 2"],
-  "key_quotes": ["quote 1", "quote 2"],
-  "recommended_focus": "2-3 sentence specific recommendation for what to demo and how to frame the meeting",
+  "pain_points": ["Pain point with source tag, e.g. 'Current platform can\\'t scale beyond 200 sites [GONG][SLACK]'"],
+  "open_questions": ["Unresolved question with source, e.g. 'Migration timeline still unclear — CSM flagged this [SLACK]'"],
+  "key_quotes": ["Verbatim quote with source, e.g. 'We need this live before Q1 [GONG]' or 'Deal is heating up per Mary Ellen [SLACK]'"],
+  "recommended_focus": "2-3 sentence recommendation synthesizing all sources. Reference specific deal context from Slack, past call insights from Gong, and company profile from web.",
+  "deal_context": "1-2 sentences on internal deal status and momentum — drawn primarily from Slack and Gong. E.g. 'CSM flagged urgency last week; they have budget approval through Q2. Mary Ellen mentioned this is a top-5 target.' Leave empty string if no internal context available.",
   "demo_script": [
     {{
       "vertical": "Vertical name (e.g. Studio Editor)",
       "headline": "One-line hook tailored to this prospect",
       "key_features": ["Feature 1 relevant to them", "Feature 2"],
-      "talking_points": ["Specific talking point 1", "Specific talking point 2", "Specific talking point 3"],
-      "discovery_questions": ["Question to ask the prospect 1", "Question 2"]
+      "talking_points": ["Specific talking point — informed by pain points and prior conversations", "Another talking point"],
+      "discovery_questions": ["Question informed by gaps in existing knowledge — tag what you already know, e.g. 'Confirm migration timeline (CSM mentioned Q2 target [SLACK])'"]
     }}
   ],
   "agenda": [
-    {{"title": "Agenda item title", "duration": "X min", "notes": "What to cover and why"}}
+    {{"title": "Agenda item title", "duration": "X min", "notes": "What to cover and why — reference specific context"}}
   ],
+  "sources_used": ["WEB", "GONG", "SLACK", "CODA"],
   "has_gong_history": {str(bool(gong_intel)).lower()},
   "has_coda_guides": {str(bool(coda_content)).lower()},
+  "has_slack_context": {str(bool(slack_context)).lower()},
   "selected_verticals": {json.dumps(selected_verticals or [])},
   "gong_last_interaction": "{gong_intel.get('last_interaction', '') if gong_intel else ''}",
   "gong_call_count": {len(calls)}
@@ -491,6 +510,19 @@ Return ONLY a valid JSON object (no markdown, no extra text) with exactly these 
 
 # ── HTML RENDERER ─────────────────────────────────────────────────────────────
 
+def tag_sources(text: str) -> str:
+    """Replace [WEB], [GONG], [SLACK], [CODA] with inline HTML badges."""
+    replacements = {
+        "[WEB]":   '<span class="src-badge web-badge">WEB</span>',
+        "[GONG]":  '<span class="src-badge gong-badge">GONG</span>',
+        "[SLACK]": '<span class="src-badge slack-badge">SLACK</span>',
+        "[CODA]":  '<span class="src-badge coda-badge">CODA</span>',
+    }
+    for tag, badge in replacements.items():
+        text = text.replace(tag, badge)
+    return text
+
+
 def render_brief_html(
     company_name: str,
     domain: str,
@@ -510,14 +542,14 @@ def render_brief_html(
           <div class="info">
             <div class="name">{a.get('name', '')}</div>
             <div class="role">{a.get('title', '')}</div>
-            <div class="note">{a.get('background', '')}</div>
-            <div class="talk-to">💬 <strong>Talk to:</strong> {a.get('talk_to', '')}</div>
+            <div class="note">{tag_sources(a.get('background', ''))}</div>
+            <div class="talk-to">💬 <strong>Talk to:</strong> {tag_sources(a.get('talk_to', ''))}</div>
           </div>
         </div>"""
 
-    # Pain points, open questions
+    # Pain points, open questions — with inline source badges
     def make_ul(items):
-        return "".join(f"<li>{i}</li>" for i in items) if items else "<li>None identified</li>"
+        return "".join(f"<li>{tag_sources(i)}</li>" for i in items) if items else "<li>None identified</li>"
 
     # Agenda
     agenda_html = ""
@@ -531,9 +563,9 @@ def render_brief_html(
           </div>
         </div>"""
 
-    # Tech stack chips
+    # Tech stack chips — with source badges
     tech_chips = "".join(
-        f'<span class="chip">{t}</span>'
+        f'<span class="chip">{tag_sources(t)}</span>'
         for t in brief.get("tech_stack", [])
     )
 
@@ -572,20 +604,23 @@ def render_brief_html(
     {demo_script_html}
   </div>"""
 
-    # Gong section
-    gong_section = ""
-    if gong_intel:
-        from gong_intel import render_html_section, GONG_CSS
-        gong_section = f"<!-- GONG_INJECT_AFTER -->\n<!-- GONG_SECTION_START -->\n{render_html_section(company_name, gong_intel, calls)}\n<!-- GONG_SECTION_END -->"
-    else:
-        gong_section = """<!-- GONG_INJECT_AFTER -->
-<div style="margin:32px 0;padding:20px 24px;background:#F4F6FA;border:1px solid #E8ECF2;border-radius:10px;font-size:14px;color:#5A6478;">
-  <strong>No Gong history found</strong> — this appears to be a new prospect. No previous calls in the last 90 days.
-</div>"""
+    # Deal context card (synthesized from Slack + Gong)
+    deal_context_section = ""
+    deal_context = brief.get("deal_context", "")
+    if deal_context and deal_context.strip():
+        deal_context_html = tag_sources(deal_context)
+        deal_context_section = f"""
+  <div class="card">
+    <h2>Deal Context & Internal Intel</h2>
+    <div class="callout green">
+      <div class="callout-label">Internal Context</div>
+      {deal_context_html}
+    </div>
+  </div>"""
 
-    # Quotes
+    # Quotes — with source badges
     quotes_html = "".join(
-        f'<blockquote class="quote">"{q}"</blockquote>'
+        f'<blockquote class="quote">{tag_sources(q)}</blockquote>'
         for q in brief.get("key_quotes", [])
     )
     quotes_block = f"""
@@ -650,6 +685,8 @@ def render_brief_html(
     .web-badge {{ display:inline-block; background:#EEF4FF; border:1px solid #C0D4FF; color:var(--blue); border-radius:4px; font-size:10px; font-weight:700; padding:2px 6px; margin-left:6px; vertical-align:middle; letter-spacing:.04em; }}
     .gong-badge {{ display:inline-block; background:#FFF0EC; border:1px solid #FFCDB8; color:#FF4C00; border-radius:4px; font-size:10px; font-weight:700; padding:2px 6px; margin-left:6px; vertical-align:middle; letter-spacing:.04em; }}
     .coda-badge {{ display:inline-block; background:#F0FBF4; border:1px solid #A8E2BC; color:#1A7A3A; border-radius:4px; font-size:10px; font-weight:700; padding:2px 6px; margin-left:6px; vertical-align:middle; letter-spacing:.04em; }}
+    .slack-badge {{ display:inline-block; background:#F5F0FF; border:1px solid #D4C0FF; color:#611F69; border-radius:4px; font-size:10px; font-weight:700; padding:2px 6px; margin-left:6px; vertical-align:middle; letter-spacing:.04em; }}
+    .src-badge {{ display:inline-block; border-radius:3px; font-size:9px; font-weight:700; padding:1px 5px; margin-left:4px; vertical-align:middle; letter-spacing:.04em; }}
     .demo-script-block {{ border:1px solid var(--border); border-radius:8px; margin-bottom:16px; overflow:hidden; }}
     .demo-script-header {{ background:var(--light); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }}
     .demo-script-vertical {{ font-size:14px; font-weight:700; color:var(--dark); }}
@@ -682,16 +719,16 @@ def render_brief_html(
     <div>👥 <strong>Size:</strong> {brief.get('company_size', 'N/A')}</div>
     <div>🌐 <strong>Domain:</strong> {domain}</div>
     <div>📞 <strong>Gong calls:</strong> {brief.get('gong_call_count', 0)} {'(last: ' + brief.get('gong_last_interaction','') + ')' if brief.get('gong_last_interaction') else '(new prospect)'}</div>
-    <div>🔍 <strong>Sources:</strong> <span class="web-badge">WEB</span>{'<span class="gong-badge">GONG</span>' if brief.get('has_gong_history') else ''}{'<span class="coda-badge">CODA</span>' if brief.get('has_coda_guides') else ''}</div>
+    <div>🔍 <strong>Sources:</strong> {''.join(f'<span class="{s.lower()}-badge">{s}</span>' for s in brief.get('sources_used', ['WEB']))}</div>
   </div>
 
   <div class="card">
     <h2>Company Snapshot <span class="web-badge">WEB</span></h2>
-    <p style="font-size:14px;line-height:1.7;margin-bottom:16px;">{brief.get('company_summary', '')}</p>
+    <p style="font-size:14px;line-height:1.7;margin-bottom:16px;">{tag_sources(brief.get('company_summary', ''))}</p>
     <div class="two-col">
       <div>
         <div class="col-label">Why Evaluating Wix</div>
-        <p style="font-size:13px;line-height:1.6;">{brief.get('why_wix', '')}</p>
+        <p style="font-size:13px;line-height:1.6;">{tag_sources(brief.get('why_wix', ''))}</p>
       </div>
       <div>
         <div class="col-label">Known Tech Stack</div>
@@ -701,15 +738,15 @@ def render_brief_html(
   </div>
 
   <div class="card">
-    <h2>Recommended Focus <span class="{'gong-badge' if brief.get('has_gong_history') else 'web-badge'}">{'GONG+WEB' if brief.get('has_gong_history') else 'WEB'}</span></h2>
+    <h2>Recommended Focus</h2>
     <div class="callout amber">
       <div class="callout-label">🎯 SE Recommendation</div>
-      {brief.get('recommended_focus', '')}
+      {tag_sources(brief.get('recommended_focus', ''))}
     </div>
   </div>
 
   <div class="card">
-    <h2>Pain Points &amp; Open Questions <span class="{'gong-badge' if brief.get('has_gong_history') else 'web-badge'}">{'GONG+WEB' if brief.get('has_gong_history') else 'WEB'}</span></h2>
+    <h2>Pain Points &amp; Open Questions</h2>
     <div class="two-col">
       <div>
         <div class="col-label">Pain Points</div>
@@ -734,9 +771,9 @@ def render_brief_html(
 
   {demo_script_section}
 
-  {quotes_block}
+  {deal_context_section}
 
-  {gong_section}
+  {quotes_block}
 
 </div>
 </body>
@@ -752,6 +789,7 @@ def main():
     parser.add_argument("--attendees", default="",    help="Comma-separated attendee names")
     parser.add_argument("--days",      type=int, default=90, help="Gong lookback days (default: 90)")
     parser.add_argument("--output",    default="",    help="Output filename stem (auto-generated if omitted)")
+    parser.add_argument("--slack-context", default="", help="Pre-gathered Slack context (passed by Claude Code after searching Slack MCP)")
     args = parser.parse_args()
 
     attendee_list = [a.strip() for a in args.attendees.split(",") if a.strip()]
@@ -773,7 +811,18 @@ def main():
     selected_verticals = determine_relevant_verticals(args.name, company_research, gong_intel)
     coda_content       = pull_coda_demo_guides(selected_verticals)
 
-    # 4. Synthesize with Claude
+    # 4. Load Slack context (if provided by Claude Code)
+    slack_context = args.slack_context
+    if slack_context and os.path.isfile(slack_context):
+        # If a file path was passed, read the file contents
+        slack_context = Path(slack_context).read_text(encoding="utf-8")
+        print(f"[Slack] Loaded context from file: {args.slack_context}", file=sys.stderr)
+    elif slack_context:
+        print(f"[Slack] Using inline context ({len(slack_context)} chars)", file=sys.stderr)
+    else:
+        print("[Slack] No Slack context provided — skipping", file=sys.stderr)
+
+    # 5. Synthesize with Claude
     brief = synthesize_brief(
         company_name=args.name,
         domain=args.domain,
@@ -784,6 +833,7 @@ def main():
         calls=calls,
         coda_content=coda_content,
         selected_verticals=selected_verticals,
+        slack_context=slack_context,
     )
 
     if not brief:

@@ -35,19 +35,39 @@ Then stop.
 
 ### STEP 2 — For Each External Meeting
 
-#### 2a. Run morning_prep.py
+#### 2a. Search Slack for Internal Context
+
+Before running the script, search Slack for internal context about this company. Use `slack_search_public_and_private` with these queries (run all three):
+- `"COMPANY NAME"` — direct mentions
+- `"DOMAIN"` — email domain mentions (e.g. in deal threads)
+- Names of the external attendees — in case colleagues mentioned them
+
+Compile relevant results (deal status, blockers, internal sentiment, deadlines, action items) into a text summary. Save it to a temp file:
+```bash
+cat > /tmp/slack_context_SLUG.txt << 'SLACK_EOF'
+[Paste compiled Slack findings here]
+SLACK_EOF
+```
+
+If no Slack results found, skip the file — morning_prep.py handles missing context gracefully.
+
+#### 2b. Run morning_prep.py
 
 ```bash
 cd ~/Documents/SE\ Tools/gong_intel && python3 morning_prep.py \
   --domain DOMAIN \
   --name "COMPANY NAME" \
-  --attendees "Name1, Name2, Name3"
+  --attendees "Name1, Name2, Name3" \
+  --slack-context /tmp/slack_context_SLUG.txt
 ```
+
+If no Slack context was found, omit `--slack-context`.
 
 The script will:
 - Run DuckDuckGo web research on the company and attendees
 - Pull Gong call history for the domain
 - Attempt Coda REST API for demo guides
+- Combine with Slack internal context (if provided)
 - Synthesize everything with Claude → save HTML brief
 - Save `{slug}_site_request.json` with all parameters
 
@@ -55,7 +75,7 @@ Both files are saved to `~/Documents/SE Tools/gong_intel/Briefs/`
 
 Note the brief HTML path from `[Done] Brief saved to: ...`
 
-#### 2b. Verify Coda Demo Script
+#### 2c. Verify Coda Demo Script
 
 Read the generated HTML brief. If "Personalized Demo Script" section is MISSING:
 - Note this in the Slack message so Lee knows to pull Coda guides manually
@@ -81,6 +101,7 @@ Then send a Slack message to channel C0ANF28TR6F (NOT a DM — this channel trig
 👥 Attendees: [names]
 📞 Gong: [X calls found / No prior history]
 🗂️ Verticals: [selected_verticals from site_request.json]
+📬 Slack: [✅ Internal context found / No internal mentions]
 📊 Coda: [✅ Demo script included / ⚠️ Pull manually]
 
 [Repeat block for each meeting]
@@ -166,9 +187,9 @@ Running research now..."
 
 If the user provides company name, domain, and/or attendees directly — use those. Ask for any that are missing.
 
-### Then: run morning_prep.py + notify
+### Then: Slack search + morning_prep.py + notify
 
-Once you have company name, domain, and attendees — run the same flow as STEP 2 and STEP 3 above (morning_prep.py → verify Coda → macOS notification → Slack summary to C0ANF28TR6F mentioning <@U080X2JJDBK>).
+Once you have company name, domain, and attendees — run the same flow as STEP 2 and STEP 3 above (Slack search → morning_prep.py with --slack-context → verify Coda → macOS notification → Slack summary to C0ANF28TR6F mentioning <@U080X2JJDBK>).
 
 Then ask: "Would you like me to create a Wix demo site for [Company]?" and follow STEP 4 if yes.
 
