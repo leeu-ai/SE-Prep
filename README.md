@@ -4,69 +4,79 @@ Automated demo prep system for the SE team. Each weekday at 7am, it scans your G
 
 ---
 
-## Team Setup (new members — run this once)
+## Quick Start (new team members)
 
 ```bash
+# 1. Clone the repo
+git clone https://github.com/leeu-ai/SE-Prep.git ~/Documents/SE\ Tools/gong_intel
+
+# 2. Run setup (interactive — takes ~2 minutes)
 bash ~/Documents/SE\ Tools/gong_intel/setup.sh
+
+# 3. Activate terminal shortcuts
+source ~/.zshrc
 ```
 
-The setup script will walk you through everything interactively:
-- Installs Python dependencies
-- Collects your credentials (Gong, Anthropic, Coda, Slack)
-- Creates your `.env` file
-- Generates your personal `CLAUDE.md` (with your Slack ID)
-- Installs the 7am launchd automation (Mon–Fri)
-- Adds terminal shortcuts to `~/.zshrc`
-
-After setup, run `source ~/.zshrc` to activate the terminal shortcuts.
+That's it. The setup script installs dependencies, collects your credentials, sets up the 7am automation, and adds terminal shortcuts.
 
 ---
 
 ## Requirements
 
-- **Claude Code** installed: `npm install -g @anthropic-ai/claude-code`
-- **MCPs configured** in Claude Code (`.claude/settings.json`):
-  - Google Calendar MCP
-  - Slack MCP
-  - Wix MCP
-- **Python 3** with: `requests`, `python-dotenv`, `duckduckgo-search`
+- **Claude Code** — `npm install -g @anthropic-ai/claude-code`
+- **MCPs in Claude Code** — Google Calendar, Slack, Wix (configure in `.claude/settings.json`)
+- **Python 3** with: `requests`, `python-dotenv`, `duckduckgo-search` (setup.sh installs these)
 
 ---
 
 ## Credentials you'll need
 
-| Credential | Where to get it |
-|---|---|
-| **Gong Access Key + Secret** | Gong → Settings → API → Access Keys |
-| **Anthropic API Key** | https://console.anthropic.com/settings/keys |
-| **Coda API Token** | Coda → Settings → API → Generate Token |
-| **Slack User ID** | Slack → click your profile photo → Copy member ID (looks like `U012AB3CD`) |
-| **Slack Channel ID** | Ask your team lead for the SE prep channel ID |
+| Credential | Where to get it | Shared? |
+|---|---|---|
+| **Gong Access Key + Secret** | Pre-filled in setup (team key) | Yes |
+| **Anthropic API Key** | https://console.anthropic.com/settings/keys | No — use your own |
+| **Coda API Token** | https://coda.io/account → API Settings | No — use your own |
+| **Slack User ID** | Slack → click profile photo → Copy member ID | No — yours |
 
 ---
 
-## Terminal commands (after setup)
+## Terminal commands
 
 ```bash
 se-prep              # Same as 7am automation — scans next 48h
-se-prep-week         # Scans next 14 days (use for testing or planning ahead)
+se-prep-week         # Scans next 14 days (for testing or planning ahead)
 
-# Prep for a specific company (skips calendar scan):
+# Prep for a specific company:
 se-prep-for "Company Name" domain.com "Attendee One, Attendee Two"
 
 # Build a Wix demo site from an existing brief:
 se-demo-site "Company Name"
+
+# Pull latest updates from the team:
+se-update
 ```
 
 ---
 
 ## How it works
 
-1. **Calendar scan** — finds external meetings in the next 48h (non-Wix attendees, not declined, not all-day)
-2. **Research** — for each meeting: DuckDuckGo web research, Gong call history, Coda demo guides
-3. **Brief generation** — Claude synthesizes everything into an HTML brief + site parameters JSON, saved to `Briefs/`
-4. **Notification** — macOS notification fires immediately; Slack summary sent to team channel with meeting details, recommended focus, and Gong/Coda status
-5. **Wix demo site** — on request, creates a fully personalised Wix Studio site using the brief parameters
+1. **Calendar scan** — finds external meetings (non-Wix attendees, not declined, not all-day)
+2. **Research** — DuckDuckGo web research, Gong call history, Coda demo guides
+3. **Brief generation** — Claude synthesizes everything into an HTML brief + site parameters JSON
+4. **Notification** — macOS notification + Slack summary with meeting details and recommended focus
+5. **Wix demo site** — on request, creates a fully personalised Wix Studio site
+
+---
+
+## Staying updated
+
+When the team pushes improvements to scripts or CLAUDE.md:
+```bash
+se-update            # pulls latest from GitHub
+bash setup.sh        # re-run only if setup.sh itself changed
+```
+
+Your `.env` (credentials) and `Briefs/` (output) are gitignored — they won't be overwritten by updates.
 
 ---
 
@@ -74,37 +84,25 @@ se-demo-site "Company Name"
 
 | File | Purpose |
 |---|---|
-| `morning_prep.py` | Core pipeline: web research → Gong → Coda → Claude synthesis → HTML brief |
-| `CLAUDE.md` | Instructions Claude Code reads automatically when run from this folder |
-| `CLAUDE.md.template` | Team template — `setup.sh` generates your personal `CLAUDE.md` from this |
-| `setup.sh` | One-command team onboarding script |
-| `install_aliases.sh` | Standalone alias installer (used if not running full setup) |
-| `.env.template` | Copy to `.env` and fill in credentials |
-| `com.leeu.se-morning-prep.plist` | Lee's launchd plist (7am Mon–Fri automation) |
-| `Briefs/` | Generated HTML briefs and site parameter JSON files |
-
----
-
-## Manual run (without terminal shortcuts)
-
-```bash
-cd ~/Documents/SE\ Tools/gong_intel
-claude --print --dangerously-skip-permissions "Run the SE morning prep flow as described in CLAUDE.md"
-```
-
-Or for a specific company:
-```bash
-python3 morning_prep.py --domain company.com --name "Company Name" --attendees "Name1, Name2"
-```
+| `morning_prep.py` | Core pipeline: web → Gong → Coda → Claude → HTML brief |
+| `gong_intel.py` | Gong API client: fetch transcripts, summarize with Claude |
+| `CLAUDE.md` | Instructions Claude Code reads (generated per-person from template) |
+| `CLAUDE.md.template` | Team template with `{{SLACK_USER_ID}}` / `{{SLACK_CHANNEL_ID}}` placeholders |
+| `setup.sh` | One-command team onboarding |
+| `install_aliases.sh` | Standalone alias installer |
+| `.env.template` | Credential template (for reference) |
+| `.gitignore` | Keeps `.env`, `Briefs/`, logs out of git |
 
 ---
 
 ## Troubleshooting
 
-**No brief generated / synthesis timeout** — re-run with `--days 30` to reduce Gong data pulled
+**No brief generated / synthesis timeout** — re-run with `--days 30` to reduce Gong data
 
-**Coda guides not found** — check that your `CODA_API_TOKEN` is set in `.env` and the token has read access to the SE demo guides doc
+**Coda guides not found** — check `CODA_API_TOKEN` in `.env` and that the token has read access
 
-**Slack message not received** — messages sent from your own account don't trigger notifications; the macOS notification (Chime sound) fires separately and works regardless
+**Slack message not received** — self-sent messages don't trigger alerts; the macOS notification (Chime sound) fires separately
 
-**launchd not running** — check: `launchctl list | grep se-morning-prep`. To reload: `launchctl unload ~/Library/LaunchAgents/com.wix.se-morning-prep.plist && launchctl load ~/Library/LaunchAgents/com.wix.se-morning-prep.plist`
+**launchd not running** — `launchctl list | grep se-morning-prep` to check. Reload: `launchctl unload ~/Library/LaunchAgents/com.wix.se-morning-prep.plist && launchctl load ~/Library/LaunchAgents/com.wix.se-morning-prep.plist`
+
+**Updating after git pull** — your `CLAUDE.md` is generated from the template, so if the template changed, re-run `bash setup.sh` to regenerate it
