@@ -28,7 +28,13 @@ If no external meetings found → fire a macOS notification:
 ```bash
 osascript -e 'display notification "No external meetings in the next 48h — enjoy the clear schedule!" with title "🟢 SE Morning Prep" sound name "Chime"'
 ```
-Then send to channel C0ANF28TR6F: "<@U080X2JJDBK> No external meetings in the next 48h — enjoy the clear schedule! 🟢"
+Then send a DM via the My Claude bot:
+```bash
+curl -s -X POST https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"channel": "D0ANN8A474P", "text": "No external meetings in the next 48h — enjoy the clear schedule! 🟢"}'
+```
 Then stop.
 
 ---
@@ -124,35 +130,45 @@ Read the generated HTML brief. If "Personalized Demo Script" section is MISSING:
 
 ---
 
-### STEP 3 — macOS Notification + Slack
+### STEP 3 — macOS Notification + Slack (via My Claude bot)
 
-First, fire a macOS notification so Lee gets an immediate alert (this works regardless of Slack settings):
-
+First, fire a macOS notification:
 ```bash
 osascript -e 'display notification "Your SE briefs are ready — check Slack for details." with title "🌅 SE Morning Prep Complete" sound name "Chime"'
 ```
 
-Then send a Slack message to channel C0ANF28TR6F (NOT a DM — this channel triggers a real notification):
-
+Then send a DM via the **My Claude bot** (token in .env as SLACK_BOT_TOKEN, channel D0ANN8A474P):
+```bash
+curl -s -X POST https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "D0ANN8A474P",
+    "text": "🌅 *Good morning! Here'\''s your SE prep for the next 48h:*\n\n*1. [Company Name]* — [Meeting time]\n📋 Brief: [brief filename]\n🎯 Focus: [recommended_focus]\n👥 Attendees: [names]\n📞 Gong: [X calls / No prior history]\n🗂️ Verticals: [selected_verticals]\n📬 Slack: [✅ context found / No mentions]\n📊 Coda: [✅ included / ⚠️ Pull manually]\n\n---\n🌐 *Want a Wix demo site?* Say: \"Create demo site for [Company]\"\n_Briefs saved to: ~/Documents/SE Tools/gong_intel/Briefs/_"
+  }'
 ```
-<@U080X2JJDBK> 🌅 *Good morning! Here's your SE prep for the next 48h:*
 
-*1. [Company Name]* — [Meeting time, e.g. "Wed Mar 25 at 2:00 PM IST"]
-📋 Brief: [brief filename]
-🎯 Focus: [recommended_focus from brief — read from site_request.json]
-👥 Attendees: [names]
-📞 Gong: [X calls found / No prior history]
-🗂️ Verticals: [selected_verticals from site_request.json]
-📬 Slack: [✅ Internal context found / No internal mentions]
-📊 Coda: [✅ Demo script included / ⚠️ Pull manually]
+Build the full message text before the curl call — assemble it as a bash variable to handle multi-meeting blocks cleanly:
+```bash
+MSG="🌅 *Good morning! Here's your SE prep for the next 48h:*
 
-[Repeat block for each meeting]
+*1. CompanyName* — Wed Mar 25 at 2:00 PM
+📋 Brief: company_brief_2026-03-25.html
+🎯 Focus: ...
+👥 Attendees: Name1, Name2
+📞 Gong: 3 calls found
+🗂️ Verticals: Studio Editor, CMS
+📬 Slack: ✅ Internal context found
+📊 Coda: ✅ Demo script included
 
 ---
-🌐 *Want a Wix demo site for any of these?*
-Open Claude Code in this folder and say: "Create demo site for [Company]"
+🌐 *Want a Wix demo site?* Say: \"Create demo site for [Company]\"
+_Briefs saved to: ~/Documents/SE Tools/gong_intel/Briefs/_"
 
-_Briefs saved to: ~/Documents/SE Tools/gong_intel/Briefs/_
+curl -s -X POST https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"channel\": \"D0ANN8A474P\", \"text\": $(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$MSG")}"
 ```
 
 ---
@@ -236,7 +252,7 @@ Once you have company name, domain, and attendees — run the same flow as STEP 
 2. `morning_prep.py --data-only ...` → saves `/tmp/{slug}_raw_data.json`
 3. Read raw data JSON, synthesize brief natively → save `/tmp/{slug}_brief.json`
 4. `morning_prep.py --from-brief /tmp/{slug}_brief.json ...` → renders HTML + site_request.json
-5. macOS notification → Slack summary to C0ANF28TR6F mentioning `<@U080X2JJDBK>`
+5. macOS notification → DM via My Claude bot (curl to D0ANN8A474P with bot token $SLACK_BOT_TOKEN) — same message format as STEP 3
 
 Then ask: "Would you like me to create a Wix demo site for [Company]?" and follow STEP 4 if yes.
 
@@ -251,7 +267,7 @@ If the user says "on demand prep" or "se-prep-on-demand", run this flow:
 3. Present a numbered list of what was found and ask which ones to prep for
 4. Wait for the user's response (they can say "all" or list numbers)
 5. Run morning_prep.py for each selected meeting (same as STEP 2)
-6. Send macOS notification + Slack summary to C0ANF28TR6F mentioning <@U080X2JJDBK> (same as STEP 3)
+6. macOS notification + DM via My Claude bot (same as STEP 3 — curl to D0ANN8A474P)
 7. Ask if they want Wix demo sites for any of them (STEP 4)
 
 ---
