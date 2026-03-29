@@ -1,0 +1,27 @@
+{
+  "name": "se-morning-prep",
+  "version": "1.1.0",
+  "description": "SE Morning Prep automation for Wix Enterprise Solutions Engineering. Scans Google Calendar for upcoming external meetings, researches each company (web + Gong history + Coda demo guides), generates HTML briefs, and sends a Slack summary. Optionally creates personalised Wix demo sites.",
+  "skills": [
+    {
+      "name": "se-morning-prep",
+      "description": "Automated morning prep — scans the next 48h of calendar, researches external meetings, generates briefs, and sends Slack summary. Use this for the daily 7am scheduled run.",
+      "path": "skills/se-morning-prep/SKILL.md"
+    },
+    {
+      "name": "se-prep-on-demand",
+      "description": "On-demand prep — scans 14 days of calendar, lets you pick which meetings to prep for, generates briefs, and optionally creates Wix demo sites. Use this anytime you want to prep for a specific upcoming meeting.",
+      "path": "skills/se-prep-on-demand/SKILL.md"
+    },
+    {
+      "name": "se-prep-for",
+      "description": "Prep for a specific client — skip the calendar, just provide company name, domain, and attendees. Goes straight to research, brief generation, and Slack summary.",
+      "path": "skills/se-prep-for/SKILL.md"
+    },
+    {
+      "name": "se-demo-site",
+      "description": "Create a personalised Wix Studio demo site for a prospect, using parameters from an existing SE brief. Usage: 'Create demo site for [Company Name]'",
+      "path": "skills/se-demo-site/SKILL.md"
+    }
+  ]
+}

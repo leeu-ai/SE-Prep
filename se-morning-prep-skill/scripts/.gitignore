@@ -1,0 +1,29 @@
+# Credentials — NEVER commit
+.env
+
+# Generated briefs (per-user output, not source code)
+Briefs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Claude Code local state
+.claude/
+
+# Launchd plists (generated per-user by setup.sh)
+*.plist
+
+# Generated skill zip (rebuild from source)
+se-morning-prep-skill.zip
+
+# Stray brief/JSON files in root (should be in Briefs/)
+*_brief_*.html
+*_site_request.json
