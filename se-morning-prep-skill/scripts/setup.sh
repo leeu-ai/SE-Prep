@@ -50,14 +50,6 @@ read -p "   Gong Base URL [https://us-40005.api.gong.io]: " GONG_URL
 GONG_URL="${GONG_URL:-https://us-40005.api.gong.io}"
 echo ""
 
-# Personal keys — must be entered per person
-echo "   ── Personal keys (you must provide your own) ──"
-read -p "   Anthropic API Key (console.anthropic.com/settings/keys): " ANTHROPIC_KEY
-while [ -z "$ANTHROPIC_KEY" ]; do
-  echo "   ⚠️  Anthropic API key is required — the research pipeline needs it."
-  read -p "   Anthropic API Key: " ANTHROPIC_KEY
-done
-
 read -p "   Coda API Token (coda.io/account → API Settings): " CODA_TOKEN
 echo ""
 
@@ -85,9 +77,6 @@ cat > "$ENV_FILE" << EOF
 GONG_ACCESS_KEY=${GONG_KEY}
 GONG_ACCESS_KEY_SECRET=${GONG_SECRET}
 GONG_BASE_URL=${GONG_URL}
-
-# ── Anthropic ─────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY=${ANTHROPIC_KEY}
 
 # ── Coda ──────────────────────────────────────────────────────────────────────
 CODA_API_TOKEN=${CODA_TOKEN}

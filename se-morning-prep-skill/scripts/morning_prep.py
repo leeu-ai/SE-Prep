@@ -352,8 +352,9 @@ def pull_gong_intel(domain: str, days: int = 90) -> tuple[list, dict]:
             cid = call.get("metaData", {}).get("id", "")
             call["_transcript"] = transcripts.get(cid, "")
 
-        intel = gi.summarize_with_claude(domain, calls)
-        return calls, intel
+        # Summarization is now done natively by Claude (via --data-only / --from-brief flow).
+        # In legacy single-pass mode the caller can still synthesize via synthesize_brief().
+        return calls, None
     except Exception as e:
         print(f"[Gong] Error: {e}", file=sys.stderr)
         return [], None
@@ -790,6 +791,10 @@ def main():
     parser.add_argument("--days",      type=int, default=90, help="Gong lookback days (default: 90)")
     parser.add_argument("--output",    default="",    help="Output filename stem (auto-generated if omitted)")
     parser.add_argument("--slack-context", default="", help="Pre-gathered Slack context (passed by Claude Code after searching Slack MCP)")
+    parser.add_argument("--data-only", action="store_true",
+                        help="Fetch all raw data (web, Gong, Coda) and save to /tmp/{slug}_raw_data.json for Claude-native synthesis. No API key needed.")
+    parser.add_argument("--from-brief", default="", metavar="PATH",
+                        help="Path to a pre-synthesized brief JSON (produced by Claude natively). Renders HTML + site_request.json and exits.")
     args = parser.parse_args()
 
     attendee_list = [a.strip() for a in args.attendees.split(",") if a.strip()]
@@ -797,6 +802,93 @@ def main():
     today_str     = datetime.now().strftime("%Y-%m-%d")
     out_filename  = args.output or f"{company_slug}_brief_{today_str}.html"
     out_path      = OUTPUT_DIR / out_filename
+
+    # ── MODE: --data-only ──────────────────────────────────────────────────────
+    # Fetch everything (web research, Gong transcripts, all Coda pages) and save
+    # to /tmp/{slug}_raw_data.json. Claude reads it and synthesizes natively.
+    # No ANTHROPIC_API_KEY required.
+    if args.data_only:
+        print(f"[Data] Fetching raw data for {args.name} ({args.domain})...", file=sys.stderr)
+
+        company_research  = research_company(args.name, args.domain)
+        attendee_research = "\n".join(
+            research_attendee(name, args.name) for name in attendee_list
+        ) if attendee_list else ""
+
+        calls_raw, _ = pull_gong_intel(args.domain, days=args.days)
+        calls_data = []
+        for call in calls_raw:
+            meta = call.get("metaData", {})
+            calls_data.append({
+                "id":           meta.get("id", ""),
+                "title":        meta.get("title", "Untitled"),
+                "date":         (meta.get("started") or meta.get("scheduled") or "")[:10],
+                "duration_min": round(meta.get("duration", 0) / 60),
+                "url":          meta.get("url", ""),
+                "transcript":   (call.get("_transcript") or "")[:4000],
+            })
+
+        # Fetch Coda content for ALL verticals so Claude can pick what's relevant
+        coda_content = pull_coda_demo_guides(ALL_VERTICALS)
+
+        slack_ctx = args.slack_context
+        if slack_ctx and os.path.isfile(slack_ctx):
+            slack_ctx = Path(slack_ctx).read_text(encoding="utf-8")
+            print(f"[Slack] Loaded context from file: {args.slack_context}", file=sys.stderr)
+
+        raw_data = {
+            "company_name":      args.name,
+            "domain":            args.domain,
+            "attendees":         attendee_list,
+            "company_research":  company_research,
+            "attendee_research": attendee_research,
+            "gong_calls":        calls_data,
+            "coda_content":      (coda_content or "")[:12000],
+            "slack_context":     slack_ctx or "",
+            "available_verticals": ALL_VERTICALS,
+        }
+        raw_path = Path(f"/tmp/{company_slug}_raw_data.json")
+        raw_path.write_text(json.dumps(raw_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"[Data] Raw data saved to: {raw_path}")
+        sys.exit(0)
+
+    # ── MODE: --from-brief ────────────────────────────────────────────────────
+    # Claude has already synthesized the brief JSON natively. Load it, render
+    # HTML, and save site_request.json. No ANTHROPIC_API_KEY required.
+    if args.from_brief:
+        brief_path = Path(args.from_brief)
+        if not brief_path.exists():
+            print(f"[Error] Brief JSON not found: {args.from_brief}", file=sys.stderr)
+            sys.exit(1)
+        brief = json.loads(brief_path.read_text(encoding="utf-8"))
+
+        html = render_brief_html(
+            company_name=args.name,
+            domain=args.domain,
+            brief=brief,
+            gong_intel=brief.get("gong_intel"),
+            calls=[],
+        )
+        out_path.write_text(html, encoding="utf-8")
+        print(f"[Done] Brief saved to: {out_path}")
+
+        site_request = {
+            "company_name":       args.name,
+            "domain":             args.domain,
+            "industry":           brief.get("industry", ""),
+            "company_summary":    brief.get("company_summary", ""),
+            "why_wix":            brief.get("why_wix", ""),
+            "pain_points":        brief.get("pain_points", []),
+            "tech_stack":         brief.get("tech_stack", []),
+            "recommended_focus":  brief.get("recommended_focus", ""),
+            "selected_verticals": brief.get("selected_verticals", []),
+            "attendees":          brief.get("attendees", []),
+            "brief_file":         str(out_path),
+            "generated_at":       datetime.now().isoformat(),
+        }
+        site_request_path = OUTPUT_DIR / f"{company_slug}_site_request.json"
+        site_request_path.write_text(json.dumps(site_request, indent=2), encoding="utf-8")
+        sys.exit(0)
 
     # 1. Web research
     company_research  = research_company(args.name, args.domain)
@@ -837,7 +929,7 @@ def main():
     )
 
     if not brief:
-        print("[Error] Could not generate brief. Check your ANTHROPIC_API_KEY.", file=sys.stderr)
+        print("[Error] Could not generate brief. Tip: use --data-only then --from-brief for Claude-native synthesis (no API key needed).", file=sys.stderr)
         sys.exit(1)
 
     # 5. Render HTML
