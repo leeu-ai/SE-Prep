@@ -41,7 +41,21 @@ Then stop.
 
 ### STEP 2 — For Each External Meeting
 
-#### 2a. Search Slack for Internal Context
+#### 2a. Check for an existing brief
+
+Before doing any research, check if a brief already exists for this company in `~/Documents/SE Tools/gong_intel/Briefs/`. Look for a file matching `{slug}_brief_*.html` (e.g. `broadridge_brief_*.html`).
+
+**If a brief exists from today** → skip to STEP 3. No new research needed.
+
+**If a brief exists from a previous day** → do a lightweight update check instead of a full rebuild:
+1. Read the existing `{slug}_site_request.json` (in the same Briefs/ folder) for the current recommended_focus and key context
+2. Search Slack for any new mentions since the brief was generated (use the brief's `generated_at` date as the cutoff)
+3. If new meaningful Slack context is found (new blockers, deal updates, stakeholder changes) → re-run the full flow (steps 2b onward) and note "Updated" in the Slack message
+4. If nothing new → reuse the existing brief. Note "No updates — using existing brief from [date]" in the Slack message
+
+**If no brief exists** → run the full flow below.
+
+#### 2b. Search Slack for Internal Context
 
 Before running the script, search Slack for internal context about this company. Use `slack_search_public_and_private` with these queries (run all three):
 - `"COMPANY NAME"` — direct mentions
@@ -279,5 +293,5 @@ If the user says "on demand prep" or "se-prep-on-demand", run this flow:
 - Credentials are in `.env` in the scripts folder — loaded automatically
 - Use `python3` not `python`
 - 0 Gong calls = fine, just a new prospect
-- If morning_prep.py times out on synthesis, re-run with `--days 30`
+- If morning_prep.py times out on synthesis, re-run with `--days 90`
 - NEVER use browser automation for Wix site creation — always use Wix MCP tools
