@@ -32,52 +32,107 @@ Extract per meeting: `domain` (from external attendee email), `company_name`, `a
 ```bash
 osascript -e 'display notification "No external meetings in the next 48h — enjoy the clear schedule!" with title "🟢 SE Morning Prep" sound name "Chime"'
 ```
-Then send a Slack message to the user's configured channel: "<@SLACK_USER_ID> No external meetings in the next 48h — enjoy the clear schedule! 🟢"
+Then send a Slack message to the user's configured channel: "No external meetings in the next 48h — enjoy the clear schedule! 🟢"
 Then stop.
 
 ---
 
 ## STEP 2 — For Each External Meeting
 
-### 2a. Search Slack for Internal Context
+### 2a. Check for an existing brief
 
-Before running the script, search Slack for internal context about this company. Use `slack_search_public_and_private` with these queries (run all three):
+Before doing any research, check if a brief already exists for this company in `~/Documents/SE Tools/gong_intel/Briefs/`. Look for a file matching `{slug}_brief_*.html` (e.g. `broadridge_brief_*.html`).
+
+**If a brief exists from today** → skip to STEP 3. No new research needed.
+
+**If a brief exists from a previous day** → do a lightweight update check:
+1. Search Slack for any new mentions since the brief was generated
+2. If new meaningful Slack context is found (new blockers, deal updates, stakeholder changes) → re-run the full flow (steps 2b onward) and note "Updated" in the Slack message
+3. If nothing new → reuse the existing brief. Note "No updates — using existing brief from [date]" in the Slack message
+
+**If no brief exists** → run the full flow below.
+
+### 2b. Search Slack for Internal Context
+
+Search Slack for internal context about this company. Use `slack_search_public_and_private` with these queries (run all three):
 - `"COMPANY NAME"` — direct mentions
-- `"DOMAIN"` — email domain mentions
-- Names of the external attendees
+- `"DOMAIN"` — email domain mentions (e.g. in deal threads)
+- Names of the external attendees — in case colleagues mentioned them
 
 Compile relevant results (deal status, blockers, internal sentiment, deadlines, action items) into a text summary. Save it to a temp file:
 ```bash
 cat > /tmp/slack_context_SLUG.txt << 'SLACK_EOF'
-[Compiled Slack findings]
+[Paste compiled Slack findings here]
 SLACK_EOF
 ```
 
 If no Slack results found, skip the file — morning_prep.py handles missing context gracefully.
 
-### 2b. Run morning_prep.py
+### 2c. Run morning_prep.py — data fetch only
 
 ```bash
 cd ~/Documents/SE\ Tools/gong_intel && python3 morning_prep.py \
+  --data-only \
   --domain DOMAIN \
   --name "COMPANY NAME" \
   --attendees "Name1, Name2, Name3" \
-  --slack-context /tmp/slack_context_SLUG.txt
+  [--slack-context /tmp/slack_context_SLUG.txt]
 ```
 
-(Omit the `--slack-context` flag if no Slack results were found.)
+Omit `--slack-context` if no Slack results were found. This saves all raw data (web research, Gong transcripts, Coda pages, Slack context) to `/tmp/{slug}_raw_data.json`. No API key needed.
 
-The script will:
-- Run DuckDuckGo web research on the company and attendees
-- Pull Gong call history for the domain
-- Search Slack for internal discussions
-- Pull Coda demo guides for relevant verticals
-- Synthesize everything with Claude → save HTML brief + site_request.json
-- Save both files to `~/Documents/SE Tools/gong_intel/Briefs/`
+### 2d. Synthesize the brief natively (no API key needed)
 
-Note the brief HTML path from `[Done] Brief saved to: ...`
+Read `/tmp/{slug}_raw_data.json`. Using the data in that file, produce a brief JSON with **exactly** these fields and save it to `/tmp/{slug}_brief.json`:
 
-### 2c. Verify Coda Demo Script
+```json
+{
+  "gong_intel": {
+    "last_interaction": "YYYY-MM-DD",
+    "call_count": 0,
+    "products_discussed": [],
+    "pain_points": [],
+    "open_questions": [],
+    "key_quotes": [],
+    "recommended_focus": "...",
+    "summary": "..."
+  },
+  "selected_verticals": ["Studio Editor", "CMS"],
+  "company_summary": "...",
+  "industry": "...",
+  "company_size": "...",
+  "tech_stack": [],
+  "why_wix": "...",
+  "attendees": [{"name":"...","title":"...","background":"...","talk_to":"..."}],
+  "pain_points": [],
+  "open_questions": [],
+  "key_quotes": [],
+  "recommended_focus": "...",
+  "deal_context": "...",
+  "demo_script": [{"vertical":"...","headline":"...","key_features":[],"talking_points":[],"discovery_questions":[]}],
+  "agenda": [{"title":"...","duration":"X min","notes":"..."}],
+  "has_gong_history": true,
+  "has_coda_guides": true,
+  "gong_last_interaction": "YYYY-MM-DD",
+  "gong_call_count": 0
+}
+```
+
+Use source tags in text fields where appropriate: `[WEB]`, `[GONG]`, `[SLACK]`, `[CODA]`
+
+### 2e. Render the brief
+
+```bash
+cd ~/Documents/SE\ Tools/gong_intel && python3 morning_prep.py \
+  --from-brief /tmp/{slug}_brief.json \
+  --domain DOMAIN \
+  --name "COMPANY NAME" \
+  --attendees "Name1, Name2, Name3"
+```
+
+This renders the HTML brief and saves `{slug}_site_request.json` to `~/Documents/SE Tools/gong_intel/Briefs/`. Note the brief HTML path from `[Done] Brief saved to: ...`
+
+### 2f. Verify Coda Demo Script
 
 Read the generated HTML brief. If the "Personalized Demo Script" section is MISSING, note this in the Slack message so the SE knows to pull Coda guides manually.
 
@@ -156,6 +211,6 @@ If the user asked to create a Wix demo site (e.g. "create demo site for Acme"):
 - Credentials are in `.env` in the scripts folder — loaded automatically
 - Use `python3` not `python`
 - 0 Gong calls = fine, just note "No prior history"
-- If morning_prep.py times out on synthesis, re-run with `--days 30`
+- If morning_prep.py times out on data fetch, re-run with `--days 90`
 - NEVER use browser automation for Wix site creation — always use Wix MCP tools (ListWixSites, CreateWixBusinessGuide, ManageWixSite, CallWixSiteAPI)
 - Read SLACK_CHANNEL_ID and SLACK_USER_ID from `~/Documents/SE Tools/gong_intel/.env`

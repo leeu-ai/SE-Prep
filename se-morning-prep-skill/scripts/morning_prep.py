@@ -331,7 +331,7 @@ def load_gong_functions():
     return mod
 
 
-def pull_gong_intel(domain: str, days: int = 90) -> tuple[list, dict]:
+def pull_gong_intel(domain: str, days: int = 365) -> tuple[list, dict]:
     """Returns (calls_list, intel_dict). intel_dict is None if no calls found."""
     ACCESS_KEY        = os.environ.get("GONG_ACCESS_KEY", "")
     ACCESS_KEY_SECRET = os.environ.get("GONG_ACCESS_KEY_SECRET", "")
@@ -408,7 +408,7 @@ to highlight, and discovery questions that fit this company's context.
     slack_block = ""
     if slack_context:
         slack_block = f"""
-=== SLACK INTERNAL DISCUSSIONS (last 90 days) ===
+=== SLACK INTERNAL DISCUSSIONS (last 365 days) ===
 Internal Slack messages mentioning this company. Use these for context on deal status,
 internal sentiment, blockers, and any commitments made. Flag any deadlines or action items.
 
@@ -788,7 +788,7 @@ def main():
     parser.add_argument("--domain",    required=True, help="Company email domain (e.g. broadridge.com)")
     parser.add_argument("--name",      required=True, help="Company display name")
     parser.add_argument("--attendees", default="",    help="Comma-separated attendee names")
-    parser.add_argument("--days",      type=int, default=90, help="Gong lookback days (default: 90)")
+    parser.add_argument("--days",      type=int, default=365, help="Gong lookback days (default: 365)")
     parser.add_argument("--output",    default="",    help="Output filename stem (auto-generated if omitted)")
     parser.add_argument("--slack-context", default="", help="Pre-gathered Slack context (passed by Claude Code after searching Slack MCP)")
     parser.add_argument("--data-only", action="store_true",
